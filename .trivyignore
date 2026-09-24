@@ -16,3 +16,14 @@ CVE-2026-13506
 # mssql-jdbc 13.2.1: false positive, 13.2.1 is itself listed as a fixed version; the SQL Server driver is not used
 # (the image is built for PostgreSQL).
 CVE-2025-59250
+
+# pcre2 / pcre2-syntax 10.40-6.el9 (OS package of the UBI 9 base image, not a Keycloak library). No fixed version.
+# Exploiting either one requires a program that uses PCRE2 to compile or run an attacker-chosen regular expression;
+# Keycloak runs on the JVM and uses java.util.regex, and PCRE2 is only there for base-image system utilities.
+# Not reported by this repo's CI (ignore-unfixed) but listed by the weekly unfiltered scan of the deployed image
+# (gointerop/gointerop-keycloak cve-scan.yaml, run 36018713095). Accepted on 2026-09-24.
+# CVE-2026-86145: out-of-bounds write via crafted regular expression. Red Hat status: will_not_fix, so it stays
+# for as long as Keycloak ships on UBI 9.
+CVE-2026-86145
+# CVE-2026-89161: memory corruption in pcre2_jit_match. Red Hat status: affected (fix not published yet).
+CVE-2026-89161
