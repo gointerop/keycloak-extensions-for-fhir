@@ -10,20 +10,22 @@ import static org.junit.Assert.fail;
 
 import java.net.URI;
 import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Entity;
-import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.core.MultivaluedHashMap;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.ClientBuilder;
+import jakarta.ws.rs.client.Entity;
+import jakarta.ws.rs.client.WebTarget;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.Response;
 
-import org.apache.hc.core5.http.message.BasicNameValuePair;
-import org.apache.hc.core5.net.URLEncodedUtils;
 import org.openqa.selenium.By;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
@@ -34,8 +36,6 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import io.github.bonigarcia.wdm.WebDriverManager;
 
 public class SeleniumOauthInteraction {
 
@@ -55,9 +55,9 @@ public class SeleniumOauthInteraction {
         oauthAuthUrl = oauth_auth_url;
         oauthTokenUrl = oauth_token_url;
 
-        WebDriverManager.chromedriver().setup();
         ChromeOptions options = new ChromeOptions();
-        options.setHeadless(true);
+        // Selenium Manager resolves the matching chromedriver automatically
+        options.addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage");
         driver = new ChromeDriver(options);
     }
 
@@ -77,27 +77,28 @@ public class SeleniumOauthInteraction {
         Map<String, String> response = new HashMap<String, String>();
 
         try {
-            BasicNameValuePair[] params = new BasicNameValuePair[] {
-                    new BasicNameValuePair("response_type", "code"),
-                    new BasicNameValuePair("state", UUID.randomUUID().toString()),
-                    new BasicNameValuePair("client_id", appClientId),
-                    new BasicNameValuePair("redirect_uri", appRedirectUri),
-                    new BasicNameValuePair("aud", aud),
-                    new BasicNameValuePair("scope", String.join(" ", scope)),
-            };
-            String queryString = URLEncodedUtils.format(Arrays.asList(params), UTF_8);
+            Map<String, String> params = new LinkedHashMap<>();
+            params.put("response_type", "code");
+            params.put("state", UUID.randomUUID().toString());
+            params.put("client_id", appClientId);
+            params.put("redirect_uri", appRedirectUri);
+            params.put("aud", aud);
+            params.put("scope", String.join(" ", scope));
+            String queryString = params.entrySet().stream()
+                    .map(e -> URLEncoder.encode(e.getKey(), UTF_8) + "=" + URLEncoder.encode(e.getValue(), UTF_8))
+                    .collect(Collectors.joining("&"));
 
             // launch Firefox and direct it to the Base URL
             driver.get(oauthAuthUrl + "?" + queryString);
 
-            WebElement dynamicElement = (new WebDriverWait(driver, 10))
+            WebElement dynamicElement = (new WebDriverWait(driver, Duration.ofSeconds(10)))
                     .until(ExpectedConditions.presenceOfElementLocated(By.id("username")));
             dynamicElement.sendKeys(user);
 
             driver.findElement(By.id("password")).sendKeys(pass);
             driver.findElement(By.id("kc-login")).click();
 
-            Boolean loginButtonDisappeared = (new WebDriverWait(driver, 5, 200))
+            Boolean loginButtonDisappeared = (new WebDriverWait(driver, Duration.ofSeconds(5), Duration.ofMillis(200)))
                     .until(ExpectedConditions.invisibilityOfElementLocated(By.id("kc-login")));
             LOGGER.debug("Login button is visible?? " + !loginButtonDisappeared);
 
@@ -118,7 +119,7 @@ public class SeleniumOauthInteraction {
             //   input id=submit
             try {
                 // wait up to 3 seconds - poll for element every 200 ms
-                new WebDriverWait(driver, 3, 200)
+                new WebDriverWait(driver, Duration.ofSeconds(3), Duration.ofMillis(200))
                         .until(ExpectedConditions.presenceOfElementLocated(By.id("patient-selection")));
 
                 // simulate choosing the patient that has an id of "PatientA"
@@ -138,7 +139,7 @@ public class SeleniumOauthInteraction {
             //   input kd=kc-login YES
             try {
                 // either the button is found or a TimeoutException is generated
-                WebElement grantAccessButton = (new WebDriverWait(driver, 1,200))
+                WebElement grantAccessButton = (new WebDriverWait(driver, Duration.ofSeconds(1), Duration.ofMillis(200)))
                         .until(ExpectedConditions.presenceOfElementLocated(By.id("kc-login")));
 
                 grantAccessButton.click();
@@ -247,7 +248,7 @@ public class SeleniumOauthInteraction {
     // main method allows for easy standalone testing. This could be moved to a separate file.
     public static void main(String[] args) throws Exception {
         String realm = "test";
-        String baseUrl = "http://localhost:8080/auth/realms/" + realm + "/protocol/openid-connect/";
+        String baseUrl = "http://localhost:8080/realms/" + realm + "/protocol/openid-connect/";
 
         SeleniumOauthInteraction s = new SeleniumOauthInteraction("test", "https://localhost",
                 baseUrl + "auth", baseUrl + "token");

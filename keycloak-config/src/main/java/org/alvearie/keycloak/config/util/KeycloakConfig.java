@@ -38,6 +38,7 @@ public class KeycloakConfig {
 
     // Keycloak configuration property names (relative)
     public static final String PROP_REALM_ENABLED = "enabled";
+    public static final String PROP_UNMANAGED_ATTRIBUTE_POLICY = "unmanagedAttributePolicy";
     public static final String PROP_CLIENT_SCOPES = "clientScopes";
     public static final String PROP_CLIENT_SCOPE_DESCRIPTION = "description";
     public static final String PROP_CLIENT_SCOPE_PROTOCOL = "protocol";
@@ -88,6 +89,9 @@ public class KeycloakConfig {
     public static final String PROP_DEFAULT_GROUPS = "defaultGroups";
     public static final String PROP_USERS = "users";
     public static final String PROP_USER_ENABLED = "enabled";
+    public static final String PROP_USER_EMAIL = "email";
+    public static final String PROP_USER_FIRST_NAME = "firstName";
+    public static final String PROP_USER_LAST_NAME = "lastName";
     public static final String PROP_USER_PASSWORD = "password";
     public static final String PROP_USER_PASSWORD_TEMPORARY = "passwordTemporary";
     public static final String PROP_USER_ATTRIBUTES = "attributes";

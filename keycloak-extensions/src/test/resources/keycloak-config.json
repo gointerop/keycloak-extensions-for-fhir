@@ -102,7 +102,7 @@
 			}
 		},
 		"browserFlow": "SMART App Launch",
-		"defaultDefaultClientScopes": ["profile"],
+		"defaultDefaultClientScopes": ["basic", "profile"],
 		"defaultOptionalClientScopes": [
 			"fhirUser",
 			"launch/patient"
@@ -121,6 +121,9 @@
 			"a": {
 				"enabled": true,
 				"password": "a",
+				"email": "a@example.com",
+				"firstName": "User",
+				"lastName": "A",
 				"passwordTemporary": false,
 				"attributes": {
 					"resourceId": ["PatientA PatientB PatientMissing"]
@@ -129,6 +132,9 @@
 			"b": {
 				"enabled": true,
 				"password": "b",
+				"email": "b@example.com",
+				"firstName": "User",
+				"lastName": "B",
 				"passwordTemporary": false,
 				"attributes": {
 					"resourceId": ["PatientB"]

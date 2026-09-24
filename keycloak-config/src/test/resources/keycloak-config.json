@@ -1,6 +1,6 @@
 {
 	"keycloak": {
-		"serverUrl": "http://localhost:55095/auth",
+		"serverUrl": "http://localhost:55095",
 		"adminUser": "admin",
 		"adminPassword": "admin",
 		"adminClientId": "admin-cli",
@@ -460,7 +460,7 @@
 						}
 					}
 				},
-				"defaultDefaultClientScopes": ["launch/patient"],
+				"defaultDefaultClientScopes": ["basic", "launch/patient"],
 				"defaultOptionalClientScopes": [
 					"fhirUser",
 					"offline_access",

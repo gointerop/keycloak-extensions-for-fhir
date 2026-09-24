@@ -5,24 +5,24 @@ SPDX-License-Identifier: Apache-2.0
 */
 package org.alvearie.keycloak;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import javax.ws.rs.RuntimeType;
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.Entity;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Response;
 
 import org.alvearie.keycloak.freemarker.PatientStruct;
 import org.jboss.logging.Logger;
-import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
-import org.jboss.resteasy.util.HttpHeaderNames;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.Authenticator;
@@ -35,6 +35,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserSessionModel;
+import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.TokenManager;
 import org.keycloak.representations.AccessToken;
@@ -43,17 +44,10 @@ import org.keycloak.services.Urls;
 import org.keycloak.services.util.DefaultClientSessionContext;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
-import com.ibm.fhir.core.FHIRMediaType;
-import com.ibm.fhir.model.config.FHIRModelConfig;
-import com.ibm.fhir.model.resource.Bundle;
-import com.ibm.fhir.model.resource.Bundle.Entry;
-import com.ibm.fhir.model.resource.Patient;
-import com.ibm.fhir.model.type.Date;
-import com.ibm.fhir.model.type.HumanName;
-import com.ibm.fhir.model.type.Url;
-import com.ibm.fhir.model.type.code.BundleType;
-import com.ibm.fhir.model.type.code.HTTPVerb;
-import com.ibm.fhir.provider.FHIRProvider;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * Present a patient context picker when the client requests the launch/patient scope and the
@@ -70,13 +64,11 @@ public class PatientSelectionForm implements Authenticator {
 
     private static final String ATTRIBUTE_RESOURCE_ID = "resourceId";
 
-    private Client fhirClient;
-
-    public PatientSelectionForm() {
-        FHIRModelConfig.setExtendedCodeableConceptValidation(false);
-        fhirClient = ResteasyClientBuilder.newClient()
-                .register(new FHIRProvider(RuntimeType.CLIENT));
-    }
+    private static final String FHIR_JSON = "application/fhir+json";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
@@ -84,7 +76,8 @@ public class PatientSelectionForm implements Authenticator {
         ClientModel client = authSession.getClient();
 
         String requestedScopesString = authSession.getClientNote(OIDCLoginProtocol.SCOPE_PARAM);
-        Stream<ClientScopeModel> clientScopes = TokenManager.getRequestedClientScopes(requestedScopesString, client);
+        Stream<ClientScopeModel> clientScopes = TokenManager.getRequestedClientScopes(context.getSession(),
+                requestedScopesString, client, context.getUser());
 
         if (clientScopes.noneMatch(s -> SMART_SCOPE_LAUNCH_PATIENT.equals(s.getName()))) {
             // no launch/patient scope == no-op
@@ -115,41 +108,55 @@ public class PatientSelectionForm implements Authenticator {
 
         String accessToken = buildInternalAccessToken(context, resourceIds);
 
-        Bundle requestBundle = buildRequestBundle(resourceIds);
-        try (Response fhirResponse = fhirClient
-                .target(config.getConfig().get(PatientSelectionFormFactory.INTERNAL_FHIR_URL_PROP_NAME))
-                .request(MediaType.APPLICATION_JSON)
-                .header(HttpHeaderNames.AUTHORIZATION, "Bearer " + accessToken)
-                .post(Entity.entity(requestBundle, FHIRMediaType.APPLICATION_FHIR_JSON_TYPE))) {
+        HttpResponse<String> fhirResponse;
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(config.getConfig().get(PatientSelectionFormFactory.INTERNAL_FHIR_URL_PROP_NAME)))
+                    .timeout(Duration.ofSeconds(30))
+                    .header(HttpHeaders.ACCEPT, FHIR_JSON + ", application/json")
+                    .header(HttpHeaders.CONTENT_TYPE, FHIR_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .POST(HttpRequest.BodyPublishers.ofString(buildRequestBundle(resourceIds)))
+                    .build();
+            fhirResponse = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (IOException e) {
+            LOG.warn("Error while calling the FHIR server for the selection form", e);
+            fail(context, "Error while retrieving Patient resources for the selection form");
+            return;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            fail(context, "Error while retrieving Patient resources for the selection form");
+            return;
+        }
 
-            if (fhirResponse.getStatus() != 200) {
-                String msg = "Error while retrieving Patient resources for the selection form";
-                LOG.warnf(msg);
-                LOG.warnf("Response with code " + fhirResponse.getStatus() + "%n%s", fhirResponse.readEntity(String.class));
-                context.failure(AuthenticationFlowError.INTERNAL_ERROR,
-                        Response.status(302)
-                        .header("Location", context.getAuthenticationSession().getRedirectUri() +
-                                "?error=server_error" +
-                                "&error_description=" + msg)
-                        .build());
-                return;
-            }
+        if (fhirResponse.statusCode() != 200) {
+            LOG.warnf("Response with code %d%n%s", fhirResponse.statusCode(), fhirResponse.body());
+            fail(context, "Error while retrieving Patient resources for the selection form");
+            return;
+        }
 
-            List<PatientStruct> patients = gatherPatientInfo(fhirResponse.readEntity(Bundle.class));
-            if (patients.isEmpty()) {
-                succeed(context, resourceIds.get(0));
-                return;
-            }
+        List<PatientStruct> patients;
+        try {
+            patients = gatherPatientInfo(MAPPER.readTree(fhirResponse.body()));
+        } catch (IOException e) {
+            LOG.warn("Unable to parse the FHIR batch response", e);
+            fail(context, "Error while retrieving Patient resources for the selection form");
+            return;
+        }
 
-            if (patients.size() == 1) {
-                succeed(context, patients.get(0).getId());
-            } else {
-                Response response = context.form()
-                        .setAttribute("patients", patients)
-                        .createForm("patient-select-form.ftl");
+        if (patients.isEmpty()) {
+            succeed(context, resourceIds.get(0));
+            return;
+        }
 
-                context.challenge(response);
-            }
+        if (patients.size() == 1) {
+            succeed(context, patients.get(0).getId());
+        } else {
+            Response response = context.form()
+                    .setAttribute("patients", patients)
+                    .createForm("patient-select-form.ftl");
+
+            context.challenge(response);
         }
     }
 
@@ -167,8 +174,10 @@ public class PatientSelectionForm implements Authenticator {
         UserModel user = context.getUser();
         ClientModel client = authSession.getClient();
 
-        UserSessionModel userSession = session.sessions().createUserSession(context.getRealm(), user, user.getUsername(),
-                context.getConnection().getRemoteAddr(), null, false, null, null);
+        // A throwaway session that only lives for this request; it must not be persisted
+        UserSessionModel userSession = session.sessions().createUserSession(KeycloakModelUtils.generateId(),
+                context.getRealm(), user, user.getUsername(), context.getConnection().getRemoteAddr(), null, false,
+                null, null, UserSessionModel.SessionPersistenceState.TRANSIENT);
 
         AuthenticatedClientSessionModel authedClientSession = userSession.getAuthenticatedClientSessionByClient(client.getId());
         if (authedClientSession == null) {
@@ -192,7 +201,7 @@ public class PatientSelectionForm implements Authenticator {
         // Checking of the requested audience should be performed in a previous step by the AudienceValidator
         TokenManager tokenManager = new TokenManager();
         AccessToken accessToken = tokenManager.createClientAccessToken(session, context.getRealm(), authSession.getClient(),
-                context.getUser(), userSession, clientSessionCtx);
+                context.getUser(), userSession, clientSessionCtx, false);
 
         // Explicitly override the scope string with what we need (less brittle than depending on this to exist as a client scope)
         accessToken.setScope(SMART_SCOPE_PATIENT_READ);
@@ -202,19 +211,20 @@ public class PatientSelectionForm implements Authenticator {
         return session.tokens().encode(jwt);
     }
 
-    private Bundle buildRequestBundle(List<String> resourceIds) {
-        Bundle.Builder requestBuilder = Bundle.builder()
-                .type(BundleType.BATCH);
-        resourceIds.stream()
-                .map(id -> Entry.Request.builder()
-                        .method(HTTPVerb.GET)
-                        .url(Url.of("Patient/" + id))
-                        .build())
-                .map(request -> Entry.builder()
-                        .request(request)
-                        .build())
-                .forEach(entry -> requestBuilder.entry(entry));
-        return requestBuilder.build();
+    /**
+     * Build a FHIR batch Bundle with one "GET Patient/[id]" entry per resource id.
+     */
+    static String buildRequestBundle(List<String> resourceIds) {
+        ObjectNode bundle = MAPPER.createObjectNode();
+        bundle.put("resourceType", "Bundle");
+        bundle.put("type", "batch");
+        ArrayNode entries = bundle.putArray("entry");
+        for (String id : resourceIds) {
+            ObjectNode request = entries.addObject().putObject("request");
+            request.put("method", "GET");
+            request.put("url", "Patient/" + id);
+        }
+        return bundle.toString();
     }
 
     private void fail(AuthenticationFlowContext context, String msg) {
@@ -233,31 +243,37 @@ public class PatientSelectionForm implements Authenticator {
         context.success();
     }
 
-    private List<PatientStruct> gatherPatientInfo(Bundle fhirResponse) {
+    /**
+     * Extract id, display name and birth date from each successful Patient entry of a FHIR batch-response Bundle.
+     */
+    static List<PatientStruct> gatherPatientInfo(JsonNode bundle) {
         List<PatientStruct> patients = new ArrayList<>();
 
-        for (Entry entry : fhirResponse.getEntry()) {
-            if (entry.getResponse() == null || !entry.getResponse().getStatus().hasValue() ||
-                    !entry.getResponse().getStatus().getValue().startsWith("200")) {
+        for (JsonNode entry : bundle.path("entry")) {
+            if (!entry.path("response").path("status").asText("").startsWith("200")) {
                 continue;
             }
 
-            Patient patient = entry.getResource().as(Patient.class);
-
-            String patientId = patient.getId();
-
-            String patientName = "Missing Name";
-            if (patient.getName().isEmpty()) {
-                LOG.warn("Patient[id=" + patient.getId() + "] has no name; using placeholder");
-            } else {
-                if (patient.getName().size() > 1) {
-                    LOG.warn("Patient[id=" + patient.getId() + "] has multiple names; using the first one");
-                }
-                patientName = constructSimpleName(patient.getName().get(0));
+            JsonNode patient = entry.path("resource");
+            if (!"Patient".equals(patient.path("resourceType").asText())) {
+                continue;
             }
 
-            String patientDOB = patient.getBirthDate() == null ? "missing"
-                    : Date.PARSER_FORMATTER.format(patient.getBirthDate().getValue());
+            String patientId = patient.path("id").asText();
+
+            String patientName = "Missing Name";
+            JsonNode names = patient.path("name");
+            if (names.isEmpty()) {
+                LOG.warn("Patient[id=" + patientId + "] has no name; using placeholder");
+            } else {
+                if (names.size() > 1) {
+                    LOG.warn("Patient[id=" + patientId + "] has multiple names; using the first one");
+                }
+                patientName = constructSimpleName(names.get(0));
+            }
+
+            // FHIR dates are already serialized as YYYY, YYYY-MM or YYYY-MM-DD
+            String patientDOB = patient.path("birthDate").asText("missing");
 
             patients.add(new PatientStruct(patientId, patientName, patientDOB));
         }
@@ -265,15 +281,17 @@ public class PatientSelectionForm implements Authenticator {
         return patients;
     }
 
-    private String constructSimpleName(HumanName name) {
-        if (name.getText() != null && name.getText().hasValue()) {
-            return name.getText().getValue();
+    private static String constructSimpleName(JsonNode name) {
+        if (name.hasNonNull("text") && !name.get("text").asText().isEmpty()) {
+            return name.get("text").asText();
         }
 
-        return Stream.concat(name.getGiven().stream(), Stream.of(name.getFamily()))
-                .map(n -> n.getValue())
-                .filter(Objects::nonNull)
-                .collect(Collectors.joining(" "));
+        List<String> parts = new ArrayList<>();
+        name.path("given").forEach(g -> parts.add(g.asText()));
+        if (name.hasNonNull("family")) {
+            parts.add(name.get("family").asText());
+        }
+        return String.join(" ", parts);
     }
 
     @Override
@@ -299,7 +317,7 @@ public class PatientSelectionForm implements Authenticator {
         LOG.debugf("The user selected patient '%s'", patient);
 
         if (patient == null || patient.trim().isEmpty() || !getResourceIdsForUser(context).contains(patient.trim())) {
-            LOG.warnf("The patient selection '%s' is not valid for the authenticated user.", patient.trim());
+            LOG.warnf("The patient selection '%s' is not valid for the authenticated user.", patient);
             context.cancelLogin();
 
             // reauthenticate...
@@ -312,8 +330,5 @@ public class PatientSelectionForm implements Authenticator {
 
     @Override
     public void close() {
-        if (fhirClient != null) {
-            fhirClient.close();
-        }
     }
 }

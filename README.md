@@ -60,21 +60,27 @@ For `launch/patient` support, the Keycloak extensions for FHIR KeycloakConfigura
 ![A screenshot of the User Session Note mapper for the patient_id note](images/patient-id-token-mapper.png)
 
 ### Using the docker images
-Published Docker images from this project:
-* [alvearie/smart-keycloak](https://quay.io/repository/alvearie/smart-keycloak) extends the official Keycloak image with the `keycloak-extensions` and their dependencies
-* [alvearie/keycloak-config](https://quay.io/repository/alvearie/keycloak-config) packages the `keycloak-config` module on top of `adoptopenjdk/openjdk11-openj9:ubi` (for configuring Keycloak realms)
+Docker images built from this project:
+* `ghcr.io/gointerop/keycloak-extensions-for-fhir` (root `Dockerfile`) extends the official Keycloak (Quarkus) image with the `keycloak-extensions` providers, pre-built for PostgreSQL with health and metrics enabled
+* `keycloak-config` (`keycloak-config/Dockerfile`) packages the `keycloak-config` module on top of `eclipse-temurin:21-jre` (for configuring Keycloak realms)
 
-By default, the `alvearie/smart-keycloak` image will behave identical to the Keycloak image from which it extends.
-Here is an example for running the image with a keycloak username and password of admin/admin:
+The Keycloak image is built with `kc.sh build` and starts with `start --optimized`, so runtime settings come from `KC_*` environment variables.
+Here is an example for running it in development mode with an admin username and password of admin/admin:
 
 ```
-docker run -p 8080:8080 -p 8443:8443 -e KEYCLOAK_USER=admin -e KEYCLOAK_PASSWORD=admin alvearie/smart-keycloak
+docker run -p 8080:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin ghcr.io/gointerop/keycloak-extensions-for-fhir start-dev
 ```
 
-Once you have it running, execute the `alvearie/keycloak-config` image to create or update a Keycloak realm with SMART App Launch support.
+Keycloak 17+ serves everything from the root path (`/realms/...`, `/admin/...`) instead of `/auth`.
+To keep the legacy `/auth/...` URLs (and the `iss` claim) of an existing deployment, set `KC_HOSTNAME` to the full public URL including `/auth` (e.g. `https://keycloak.example.com/auth`) and have the reverse proxy strip the `/auth` prefix before forwarding.
 
-By default, `alvearie/keycloak-config` will use the following environment variables to connect to Keycloak and configure the KEYCLOAK_REALM with SMART App Launch support for a FHIR server at FHIR_BASE_URL:
-  * KEYCLOAK_BASE_URL=http://host.docker.internal:8080/auth
+Since Keycloak 24 the declarative user profile is always on, and attributes that are not declared in it (like `resourceId`) are dropped unless the realm allows unmanaged attributes.
+The `keycloak-config` driver sets the realm's unmanaged attribute policy to `ADMIN_EDIT` by default (override with the realm property `unmanagedAttributePolicy`).
+
+Once you have it running, execute the `keycloak-config` image to create or update a Keycloak realm with SMART App Launch support.
+
+By default, `keycloak-config` will use the following environment variables to connect to Keycloak and configure the KEYCLOAK_REALM with SMART App Launch support for a FHIR server at FHIR_BASE_URL:
+  * KEYCLOAK_BASE_URL=http://host.docker.internal:8080
   * KEYCLOAK_USER=admin
   * KEYCLOAK_PASSWORD=admin
   * KEYCLOAK_REALM=test
@@ -85,7 +91,7 @@ Additionally, the default keycloak-config image will create a single Keycloak us
 It is possible to override these environment variables via the command line (using the `-e` flag), or even to pass an entirely different configuration file by specifying a docker run command. For example, to update a Keycloak server that is listening on port 8081 of the docker host with a custom configuration, you could run a command like the following:
 
 ```
-docker run -v /local/config/dir:/config -e KEYCLOAK_BASE_URL=http://host.docker.internal:8081/auth alvearie/keycloak-config -configFile config/keycloak-config.json
+docker run -v /local/config/dir:/config -e KEYCLOAK_BASE_URL=http://host.docker.internal:8081 keycloak-config -configFile config/keycloak-config.json
 ```
 
 See https://github.com/Alvearie/keycloak-extensions-for-fhir/tree/main/keycloak-config/src/main/resources/config for the example configurations that are shipped with this image.
@@ -95,7 +101,6 @@ See https://github.com/Alvearie/keycloak-extensions-for-fhir/tree/main/keycloak-
 | Component | Description |
 |-----------|-------------|
 | keycloak-config | A Keycloak client for configuring realms via a JSON property file. |
-| jboss-fhir-provider | A Maven project for building JBoss modules which provide JAX-RS readers and writers for FHIR media types (used by the PatientSelectionForm authenticator). |
 | keycloak-extensions/AudienceValidator | A Keycloak Authenticator for validating the `aud` parameter passed as part of the SMART App Launch request to the authorization endpoint (see [SMART best practices](http://docs.smarthealthit.org/authorization/best-practices/#25-access-token-phishing-by-counterfeit-resource-servers) for more information). |
 | keycloak-extensions/PatientSelectionForm | A Keycloak Authenticator for narrowing the scope of a given session to the context of a single patient. |
 | keycloak-extensions/PatientPrefixUserAttributeMapper | A Keycloak OIDCProtocolMapper for adding the `Patient/` prefix to a user attribute; used to map the Patient resource id attribute into a valid `fhirUser` claim on the id_token when the `fhirUser` scope is requested. |
@@ -104,9 +109,11 @@ See https://github.com/Alvearie/keycloak-extensions-for-fhir/tree/main/keycloak-
 ## Building the docker images
 To build the docker images:
 1. Clone or download the project and navigate to the root of the project.
-2. Build the project via `mvn clean install -DskipTests`.
-3. Build the `alvearie/smart-keycloak` image via `docker build . -t alvearie/smart-keycloak`.
-4. Build the `alvearie/keycloak-config` image via `docker build . -f keycloak-config/Dockerfile -t alvearie/keycloak-config`.
+2. Build the project via `mvn clean install -DskipTests` (requires Java 21).
+3. Build the Keycloak image via `docker build . -t keycloak-extensions-for-fhir`.
+4. Build the `keycloak-config` image via `docker build . -f keycloak-config/Dockerfile -t keycloak-config`.
+
+`mvn verify` also runs `KeycloakContainerTest`, which starts Keycloak in Docker (Testcontainers) and drives the login with headless Chrome.
 
 ## Contributing
 Are you using Keycloak for SMART on FHIR or other health APIs? If so, we'd love to hear from you.

@@ -5,23 +5,17 @@
   <parent>
     <groupId>org.alvearie</groupId>
     <artifactId>keycloak-extensions-parent</artifactId>
-    <version>0.5.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
   </parent>
   <artifactId>keycloak-extensions</artifactId>
   <packaging>jar</packaging>
 
+  <!-- Everything here is provided by the Keycloak server at runtime, so the jar has no extra dependencies
+       to copy into /opt/keycloak/providers -->
   <dependencies>
-    <!-- The com.ibm.fhir dependencies go first to tightly control the versions
-         because we need to ensure they match the versions listed in module.xml -->
     <dependency>
-      <groupId>com.ibm.fhir</groupId>
-      <artifactId>fhir-provider</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.ibm.fhir</groupId>
-      <artifactId>fhir-model</artifactId>
-      <scope>provided</scope>
+      <groupId>org.keycloak</groupId>
+      <artifactId>keycloak-core</artifactId>
     </dependency>
     <dependency>
       <groupId>org.keycloak</groupId>
@@ -29,11 +23,11 @@
     </dependency>
     <dependency>
       <groupId>org.keycloak</groupId>
-      <artifactId>keycloak-services</artifactId>
+      <artifactId>keycloak-server-spi-private</artifactId>
     </dependency>
     <dependency>
       <groupId>org.keycloak</groupId>
-      <artifactId>keycloak-server-spi-private</artifactId>
+      <artifactId>keycloak-services</artifactId>
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
@@ -42,12 +36,12 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>com.github.dasniko</groupId>
-      <artifactId>testcontainers-keycloak</artifactId>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
     </dependency>
     <dependency>
-      <groupId>io.rest-assured</groupId>
-      <artifactId>rest-assured</artifactId>
+      <groupId>com.github.dasniko</groupId>
+      <artifactId>testcontainers-keycloak</artifactId>
     </dependency>
     <dependency>
       <groupId>ch.qos.logback</groupId>
@@ -58,16 +52,8 @@
       <artifactId>mockito-core</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-inline</artifactId>
-    </dependency>
-    <dependency>
       <groupId>org.seleniumhq.selenium</groupId>
       <artifactId>selenium-java</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.github.bonigarcia</groupId>
-      <artifactId>webdrivermanager</artifactId>
     </dependency>
     <dependency>
       <groupId>com.squareup.okhttp3</groupId>
@@ -78,44 +64,15 @@
   <build>
     <plugins>
       <plugin>
-        <artifactId>maven-dependency-plugin</artifactId>
-        <version>3.4.0</version>
-        <executions>
-          <execution>
-            <id>copy-dependencies</id>
-            <phase>compile</phase>
-            <goals>
-              <goal>copy-dependencies</goal>
-            </goals>
-            <configuration>
-              <includeArtifactIds>
-                fhir-provider,fhir-config,fhir-model,fhir-core,antlr4-runtime,commons-io,commons-lang3,commons-text,encoder,jakarta.annotation-api,jakarta.json,jcip-annotations
-              </includeArtifactIds>
-              <includeScope>compile</includeScope>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <artifactId>maven-resources-plugin</artifactId>
-        <version>3.3.0</version>
-        <executions>
-          <execution>
-            <id>copy-resources</id>
-            <phase>compile</phase>
-            <goals>
-              <goal>copy-resources</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}/dependency</outputDirectory>
-              <resources>
-                <resource>
-                  <directory>src/test/resources/jboss</directory>
-                </resource>
-              </resources>
-            </configuration>
-          </execution>
-        </executions>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- mockito's inline mock maker (used for mockStatic) is loaded as a java agent on recent JDKs -->
+          <argLine>-XX:+EnableDynamicAgentLoading</argLine>
+          <systemPropertyVariables>
+            <keycloak.version>${keycloak.version}</keycloak.version>
+          </systemPropertyVariables>
+        </configuration>
       </plugin>
     </plugins>
   </build>
