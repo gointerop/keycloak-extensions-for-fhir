@@ -1,0 +1,18 @@
+# CVEs accepted in the upstream quay.io/keycloak/keycloak image (libraries bundled by Keycloak itself, not by
+# this project). Remove each entry once a Keycloak release ships the fixed library (Dependabot tracks the base image).
+# Reviewed 2026-09-24 against Keycloak 26.7.4.
+
+# netty-handler 4.1.136 (fixed in 4.1.137): SNI routing bypass. Not reachable: TLS terminates at nginx and
+# Keycloak only serves plain HTTP on the loopback interface.
+CVE-2026-75595
+
+# bcprov-jdk18on 1.84 (fixed in 1.85): X.509 Name Constraints bypass. Only affects certificate path validation
+# (mTLS / X.509 client authentication), which is not used.
+CVE-2026-8763
+
+# bcprov-jdk18on 1.84 (fixed in 1.85): denial of service via lazy ASN.1 sequence parsing.
+CVE-2026-13506
+
+# mssql-jdbc 13.2.1: false positive, 13.2.1 is itself listed as a fixed version; the SQL Server driver is not used
+# (the image is built for PostgreSQL).
+CVE-2025-59250

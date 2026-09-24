@@ -5,17 +5,16 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  workflow_dispatch:
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/keycloak-extensions-for-fhir
+  IMAGE_NAME: docker.io/gointerop/keycloak-extensions-for-fhir
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
 
     steps:
       - uses: actions/checkout@v7
@@ -61,16 +60,18 @@ jobs:
           image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          # upstream Keycloak CVEs accepted after review, each one justified in the file
+          trivyignores: .trivyignore
           exit-code: '1'
 
-      - name: Log in to registry
-        if: github.event_name == 'push'
+      # DOCKERHUB_USERNAME / DOCKERHUB_TOKEN: a Docker Hub access token with read/write scope on the gointerop namespace
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Push image
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: docker push --all-tags ${{ env.IMAGE_NAME }}

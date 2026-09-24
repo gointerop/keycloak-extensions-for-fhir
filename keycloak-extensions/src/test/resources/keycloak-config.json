@@ -118,7 +118,7 @@
 			}
 		},
 		"users": {
-			"a": {
+			"usera": {
 				"enabled": true,
 				"password": "a",
 				"email": "a@example.com",
@@ -129,7 +129,7 @@
 					"resourceId": ["PatientA PatientB PatientMissing"]
 				}
 			},
-			"b": {
+			"userb": {
 				"enabled": true,
 				"password": "b",
 				"email": "b@example.com",

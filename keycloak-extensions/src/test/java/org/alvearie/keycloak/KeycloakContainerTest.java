@@ -38,7 +38,7 @@ import okhttp3.mockwebserver.RecordedRequest;
 public class KeycloakContainerTest {
     private static final String MASTER_REALM = "master";
     private static final String ADMIN_CLIENT_ID = "admin-cli";
-    private static final String USERNAME = "a";
+    private static final String USERNAME = "usera";
     private static final String PASSWORD = "a";
     private static final String KC_CLIENT = "test";
     private static final String REDIRECT_URI = "http://localhost";

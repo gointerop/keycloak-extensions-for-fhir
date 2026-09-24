@@ -253,7 +253,7 @@ public class SeleniumOauthInteraction {
         SeleniumOauthInteraction s = new SeleniumOauthInteraction("test", "https://localhost",
                 baseUrl + "auth", baseUrl + "token");
 
-        Map<String, String> authResponse = s.fetchCode("a", "a", "https://localhost:9443/fhir-server/api/v4",
+        Map<String, String> authResponse = s.fetchCode("usera", "a", "https://localhost:9443/fhir-server/api/v4",
                 "openid", "launch/patient");
         Map<String, String> tokenResponse = s.fetchToken(authResponse.get("code"));
 
