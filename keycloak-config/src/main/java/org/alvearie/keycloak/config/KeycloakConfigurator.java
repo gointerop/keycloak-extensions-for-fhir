@@ -14,8 +14,8 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status.Family;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response.Status.Family;
 
 import org.alvearie.keycloak.config.util.KeycloakConfig;
 import org.alvearie.keycloak.config.util.PropertyGroup;
@@ -43,6 +43,8 @@ import org.keycloak.representations.idm.IdentityProviderRepresentation;
 import org.keycloak.representations.idm.ProtocolMapperRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
+import org.keycloak.representations.userprofile.config.UPConfig;
+import org.keycloak.representations.userprofile.config.UPConfig.UnmanagedAttributePolicy;
 
 import jakarta.json.JsonObject;
 import jakarta.json.JsonString;
@@ -75,6 +77,11 @@ public class KeycloakConfigurator {
                 throw new RuntimeException("Unable to create realm");
             }
         }
+
+        // Keycloak 24+ always enables the declarative user profile, which drops attributes it doesn't know about
+        // (like resourceId) unless unmanaged attributes are allowed. ADMIN_EDIT keeps them admin-managed only,
+        // so end users can't change which patient records they are linked to.
+        initializeUserProfile(realms, realmName, realmPg);
 
         // Initialize client scopes
         PropertyGroup clientScopesPg = realmPg.getPropertyGroup(KeycloakConfig.PROP_CLIENT_SCOPES);
@@ -209,6 +216,25 @@ public class KeycloakConfigurator {
         }
         realm.setEnabled(realmPg.getBooleanProperty(KeycloakConfig.PROP_REALM_ENABLED));
         realms.realm(realmName).update(realm);
+    }
+
+    /**
+     * Configures how the realm's user profile treats attributes that are not declared in it.
+     * @param realms the realms resource
+     * @param realmName the realm name
+     * @param realmPg the realm property group
+     */
+    void initializeUserProfile(RealmsResource realms, String realmName, PropertyGroup realmPg) throws Exception {
+        String policyName = realmPg.getStringProperty(KeycloakConfig.PROP_UNMANAGED_ATTRIBUTE_POLICY);
+        UnmanagedAttributePolicy policy = policyName == null ? UnmanagedAttributePolicy.ADMIN_EDIT
+                : UnmanagedAttributePolicy.valueOf(policyName);
+
+        UPConfig upConfig = realms.realm(realmName).users().userProfile().getConfiguration();
+        if (upConfig.getUnmanagedAttributePolicy() != policy) {
+            System.out.println("setting unmanaged attribute policy: " + policy);
+            upConfig.setUnmanagedAttributePolicy(policy);
+            realms.realm(realmName).users().userProfile().update(upConfig);
+        }
     }
 
     /**
@@ -628,7 +654,7 @@ public class KeycloakConfigurator {
         for (String entry : jsonObject.keySet()) {
             PropertyGroup entryProps = authenticationExecutionsPg.getPropertyGroup(entry);
 
-            HashMap<String, String> executionParams = new HashMap<String, String>();
+            HashMap<String, Object> executionParams = new HashMap<String, Object>();
 
             String description = entryProps.getStringProperty("description");
             executionParams.put("description", description);
@@ -658,7 +684,7 @@ public class KeycloakConfigurator {
                         throw new UnsupportedOperationException("Nest subflows are not yet supported");
                     }
 
-                    HashMap<String, String> childExecutionParams = new HashMap<String, String>();
+                    HashMap<String, Object> childExecutionParams = new HashMap<String, Object>();
                     childExecutionParams.put("provider", authenticator);
                     AuthenticationExecutionInfoRepresentation childExecution = getOrCreateExecution(authMgmt, entry, displayName, childIsFlow, childExecutionParams);
 
@@ -730,7 +756,7 @@ public class KeycloakConfigurator {
     }
 
     private AuthenticationExecutionInfoRepresentation getOrCreateExecution(AuthenticationManagementResource authMgmt,
-            String flowAlias, String displayName, boolean isFlow, HashMap<String, String> executionParams) {
+            String flowAlias, String displayName, boolean isFlow, HashMap<String, Object> executionParams) {
         AuthenticationExecutionInfoRepresentation savedExecution = getExecutionByDisplayName(authMgmt, flowAlias, displayName);
         if (savedExecution == null) {
             if (isFlow) {
@@ -877,6 +903,16 @@ public class KeycloakConfigurator {
 
         // Update user settings
         user.setEnabled(userPg.getBooleanProperty(KeycloakConfig.PROP_USER_ENABLED));
+        if (userPg.getStringProperty(KeycloakConfig.PROP_USER_EMAIL) != null) {
+            user.setEmail(userPg.getStringProperty(KeycloakConfig.PROP_USER_EMAIL));
+            user.setEmailVerified(true);
+        }
+        if (userPg.getStringProperty(KeycloakConfig.PROP_USER_FIRST_NAME) != null) {
+            user.setFirstName(userPg.getStringProperty(KeycloakConfig.PROP_USER_FIRST_NAME));
+        }
+        if (userPg.getStringProperty(KeycloakConfig.PROP_USER_LAST_NAME) != null) {
+            user.setLastName(userPg.getStringProperty(KeycloakConfig.PROP_USER_LAST_NAME));
+        }
         PropertyGroup attributesPg = userPg.getPropertyGroup(KeycloakConfig.PROP_USER_ATTRIBUTES);
         if (attributesPg != null) {
             Map<String, List<String>> attributes = user.getAttributes();
@@ -900,7 +936,10 @@ public class KeycloakConfigurator {
         // Update user group memberships
         List<String> groupIds = getGroupIds(groups, userPg.getStringListProperty(KeycloakConfig.PROP_USER_GROUPS));
         if (groupIds != null) {
-            List<String> existingGroupIds = getGroupIds(groups, user.getGroups());
+            // user representations returned by searches don't carry group memberships, so ask for them explicitly
+            List<String> existingGroupIds = users.get(user.getId()).groups().stream()
+                    .map(GroupRepresentation::getId)
+                    .collect(Collectors.toList());
             for (String existingGroupId : existingGroupIds) {
                 if (!groupIds.contains(existingGroupId)) {
                     users.get(user.getId()).leaveGroup(existingGroupId);
@@ -1111,7 +1150,8 @@ public class KeycloakConfigurator {
      * @return the user, or null if not found
      */
     private UserRepresentation getUserByName(UsersResource users, String userName) {
-        for (UserRepresentation user : users.list()) {
+        // list() is paged, so search for the exact username instead
+        for (UserRepresentation user : users.searchByUsername(userName, true)) {
             if (userName.equals(user.getUsername())) {
                 return user;
             }

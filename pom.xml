@@ -6,42 +6,37 @@
 
   <groupId>org.alvearie</groupId>
   <artifactId>keycloak-extensions-parent</artifactId>
-  <version>0.5.0-SNAPSHOT</version>
+  <version>1.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <properties>
-    <keycloak.version>18.0.0</keycloak.version>
-    <testcontainers-keycloak.version>1.10.0</testcontainers-keycloak.version>
-    <ibm-fhir-server.version>4.11.1</ibm-fhir-server.version>
-    <maven.compiler.target>11</maven.compiler.target>
-    <maven.compiler.source>11</maven.compiler.source>
+    <!-- Keep in sync with the base image tag in the root Dockerfile -->
+    <keycloak.version>26.7.4</keycloak.version>
+    <!-- The admin client is released separately and is compatible with the 26.x server line -->
+    <keycloak-admin-client.version>26.0.12</keycloak-admin-client.version>
+    <testcontainers-keycloak.version>4.3.1</testcontainers-keycloak.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
   <modules>
     <module>keycloak-config</module>
     <module>keycloak-extensions</module>
-    <module>jboss-fhir-provider</module>
   </modules>
 
   <dependencyManagement>
     <dependencies>
       <dependency>
         <groupId>org.keycloak</groupId>
-        <artifactId>keycloak-server-spi</artifactId>
+        <artifactId>keycloak-core</artifactId>
         <version>${keycloak.version}</version>
         <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.keycloak</groupId>
-        <artifactId>keycloak-services</artifactId>
+        <artifactId>keycloak-server-spi</artifactId>
         <version>${keycloak.version}</version>
         <scope>provided</scope>
-        <exclusions>
-          <exclusion>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-log4j12</artifactId>
-          </exclusion>
-        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.keycloak</groupId>
@@ -51,38 +46,34 @@
       </dependency>
       <dependency>
         <groupId>org.keycloak</groupId>
-        <artifactId>keycloak-admin-client</artifactId>
+        <artifactId>keycloak-services</artifactId>
         <version>${keycloak.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.keycloak</groupId>
+        <artifactId>keycloak-admin-client</artifactId>
+        <version>${keycloak-admin-client.version}</version>
       </dependency>
       <dependency>
         <groupId>org.eclipse.parsson</groupId>
-        <artifactId>jakarta.json</artifactId>
-        <version>1.0.0</version>
+        <artifactId>parsson</artifactId>
+        <version>1.1.9</version>
       </dependency>
       <dependency>
         <groupId>commons-cli</groupId>
         <artifactId>commons-cli</artifactId>
-        <version>1.5.0</version>
+        <version>1.11.0</version>
       </dependency>
       <dependency>
         <groupId>commons-io</groupId>
         <artifactId>commons-io</artifactId>
-        <version>2.11.0</version>
+        <version>2.22.0</version>
       </dependency>
       <dependency>
         <groupId>org.apache.commons</groupId>
         <artifactId>commons-text</artifactId>
-        <version>1.9</version>
-      </dependency>
-      <dependency>
-        <groupId>com.ibm.fhir</groupId>
-        <artifactId>fhir-model</artifactId>
-        <version>${ibm-fhir-server.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.ibm.fhir</groupId>
-        <artifactId>fhir-provider</artifactId>
-        <version>${ibm-fhir-server.version}</version>
+        <version>1.15.0</version>
       </dependency>
       <dependency>
         <groupId>junit</groupId>
@@ -93,13 +84,7 @@
       <dependency>
         <groupId>org.mockito</groupId>
         <artifactId>mockito-core</artifactId>
-        <version>4.10.0</version>
-        <scope>test</scope>
-      </dependency>
-      <dependency>
-        <groupId>org.mockito</groupId>
-        <artifactId>mockito-inline</artifactId>
-        <version>4.10.0</version>
+        <version>5.24.0</version>
         <scope>test</scope>
       </dependency>
       <dependency>
@@ -109,33 +94,21 @@
         <scope>test</scope>
       </dependency>
       <dependency>
-        <groupId>io.rest-assured</groupId>
-        <artifactId>rest-assured</artifactId>
-        <version>5.3.0</version>
-        <scope>test</scope>
-      </dependency>
-      <dependency>
         <groupId>ch.qos.logback</groupId>
         <artifactId>logback-classic</artifactId>
-        <version>1.4.5</version>
+        <version>1.6.3</version>
         <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>org.seleniumhq.selenium</groupId>
         <artifactId>selenium-java</artifactId>
-        <version>4.1.1</version>
-        <scope>test</scope>
-      </dependency>
-      <dependency>
-        <groupId>io.github.bonigarcia</groupId>
-        <artifactId>webdrivermanager</artifactId>
-        <version>5.3.1</version>
+        <version>4.49.0</version>
         <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>com.squareup.okhttp3</groupId>
         <artifactId>mockwebserver</artifactId>
-        <version>4.10.0</version>
+        <version>4.12.0</version>
         <scope>test</scope>
       </dependency>
     </dependencies>
@@ -146,33 +119,23 @@
       <plugins>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-jar-plugin</artifactId>
-          <version>3.3.0</version>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.14.0</version>
         </plugin>
-        <!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
         <plugin>
-          <groupId>org.eclipse.m2e</groupId>
-          <artifactId>lifecycle-mapping</artifactId>
-          <version>1.0.0</version>
-          <configuration>
-            <lifecycleMappingMetadata>
-              <pluginExecutions>
-                <pluginExecution>
-                  <pluginExecutionFilter>
-                    <groupId>com.codenuity.jboss</groupId>
-                    <artifactId>jboss-modules-builder</artifactId>
-                    <versionRange>[1.1,)</versionRange>
-                    <goals>
-                      <goal>build</goal>
-                    </goals>
-                  </pluginExecutionFilter>
-                  <action>
-                    <ignore></ignore>
-                  </action>
-                </pluginExecution>
-              </pluginExecutions>
-            </lifecycleMappingMetadata>
-          </configuration>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>3.6.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>3.4.2</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>3.11.0</version>
         </plugin>
       </plugins>
     </pluginManagement>

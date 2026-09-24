@@ -1,17 +1,76 @@
 name: Java CI
 
-on: [push]
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/keycloak-extensions-for-fhir
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v7
+
       - name: Setup Java
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
-          java-version: '11'
+          java-version: '21'
+          cache: maven
+
+      # Runs the unit tests plus the Testcontainers/Selenium test against a real Keycloak
       - name: Build with Maven
         run: mvn --batch-mode --update-snapshots verify
+
+      - name: Read Keycloak version
+        id: kc
+        run: echo "version=$(mvn -q help:evaluate -Dexpression=keycloak.version -DforceStdout)" >> "$GITHUB_OUTPUT"
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha
+            type=ref,event=tag
+            type=raw,value=${{ steps.kc.outputs.version }},enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          build-args: KEYCLOAK_VERSION=${{ steps.kc.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # Fails the build on fixable HIGH/CRITICAL CVEs in the image
+      - name: Scan image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0, pinned by SHA because tags are mutable
+        with:
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Log in to registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        if: github.event_name == 'push'
+        run: docker push --all-tags ${{ env.IMAGE_NAME }}

@@ -557,7 +557,7 @@
 						}
 					}
 				},
-				"defaultDefaultClientScopes": [],
+				"defaultDefaultClientScopes": ["basic"],
 				"defaultOptionalClientScopes": [
 					"fhirUser",
 					"launch/patient",

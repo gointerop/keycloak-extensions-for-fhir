@@ -1301,7 +1301,7 @@
 						}
 					}
 				},
-				"defaultDefaultClientScopes": ["launch/patient"],
+				"defaultDefaultClientScopes": ["basic", "launch/patient"],
 				"defaultOptionalClientScopes": [
 					"fhirUser",
 					"offline_access",

@@ -9,7 +9,8 @@
 #   > docker build . -f keycloak-config/Dockerfile
 
 # Build stage
-FROM maven:3-jdk-11-slim AS build
+FROM maven:3-eclipse-temurin-21 AS build
+WORKDIR /build
 COPY pom.xml ./
 COPY keycloak-config ./keycloak-config
 
@@ -17,17 +18,18 @@ RUN mvn -B clean package -f keycloak-config -DskipTests
 
 
 # Package stage
-FROM eclipse-temurin:11
+FROM eclipse-temurin:21-jre
 
 RUN groupadd -r keycloak-client -g 1001 && \
     useradd -u 1001 -r -g 1001 -m -d /home/keycloak-client -s /sbin/nologin keycloak-client
 
-COPY --from=build --chown=1001:0 keycloak-config/target/keycloak-config-*.jar /jars/
-COPY --from=build --chown=1001:0 keycloak-config/target/dependency/* /jars/
-COPY --from=build --chown=1001:0 keycloak-config/src/main/resources/config/keycloak-config.json /config/
-COPY --from=build --chown=1001:0 keycloak-config/run.sh /
+COPY --from=build --chown=1001:0 /build/keycloak-config/target/keycloak-config-*.jar /jars/
+COPY --from=build --chown=1001:0 /build/keycloak-config/target/dependency/* /jars/
+COPY --from=build --chown=1001:0 /build/keycloak-config/src/main/resources/config/keycloak-config.json /config/
+COPY --from=build --chown=1001:0 /build/keycloak-config/run.sh /
 
-ENV KEYCLOAK_BASE_URL=http://host.docker.internal:8080/auth \
+# Keycloak 17+ serves from the root path; append /auth only for servers started with --http-relative-path=/auth
+ENV KEYCLOAK_BASE_URL=http://host.docker.internal:8080 \
     KEYCLOAK_REALM=test \
     KEYCLOAK_USER=admin \
     KEYCLOAK_PASSWORD=admin \
