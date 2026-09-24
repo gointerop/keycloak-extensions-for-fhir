@@ -60,6 +60,8 @@ jobs:
           image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          # upstream Keycloak CVEs accepted after review, each one justified in the file
+          trivyignores: .trivyignore
           exit-code: '1'
 
       # DOCKERHUB_USERNAME / DOCKERHUB_TOKEN: a Docker Hub access token with read/write scope on the gointerop namespace
