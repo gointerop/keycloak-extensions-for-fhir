@@ -61,14 +61,14 @@ For `launch/patient` support, the Keycloak extensions for FHIR KeycloakConfigura
 
 ### Using the docker images
 Docker images built from this project:
-* `ghcr.io/gointerop/keycloak-extensions-for-fhir` (root `Dockerfile`) extends the official Keycloak (Quarkus) image with the `keycloak-extensions` providers, pre-built for PostgreSQL with health and metrics enabled
+* `gointerop/keycloak-extensions-for-fhir` (root `Dockerfile`) extends the official Keycloak (Quarkus) image with the `keycloak-extensions` providers, pre-built for PostgreSQL with health and metrics enabled
 * `keycloak-config` (`keycloak-config/Dockerfile`) packages the `keycloak-config` module on top of `eclipse-temurin:21-jre` (for configuring Keycloak realms)
 
 The Keycloak image is built with `kc.sh build` and starts with `start --optimized`, so runtime settings come from `KC_*` environment variables.
 Here is an example for running it in development mode with an admin username and password of admin/admin:
 
 ```
-docker run -p 8080:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin ghcr.io/gointerop/keycloak-extensions-for-fhir start-dev
+docker run -p 8080:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin gointerop/keycloak-extensions-for-fhir start-dev
 ```
 
 Keycloak 17+ serves everything from the root path (`/realms/...`, `/admin/...`) instead of `/auth`.

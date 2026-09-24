@@ -287,16 +287,18 @@ public class KeycloakConfigurator {
         if (clientScope == null) {
             clientScope = new ClientScopeRepresentation();
             clientScope.setName(clientScopeName);
-            clientScopes.create(clientScope);
+            // Keycloak 26 rejects client scopes without a protocol
+            clientScope.setProtocol(clientScopePg.getStringProperty(KeycloakConfig.PROP_CLIENT_SCOPE_PROTOCOL, "openid-connect"));
+            Response response = clientScopes.create(clientScope);
             clientScope = getClientScopeByName(clientScopes, clientScopeName);
             if (clientScope == null) {
-                throw new RuntimeException("Unable to create client scope");
+                throw new RuntimeException("Unable to create client scope: " + response.readEntity(String.class));
             }
         }
 
         // Update client scope settings
         clientScope.setDescription(clientScopePg.getStringProperty(KeycloakConfig.PROP_CLIENT_SCOPE_DESCRIPTION));
-        clientScope.setProtocol(clientScopePg.getStringProperty(KeycloakConfig.PROP_CLIENT_SCOPE_PROTOCOL));
+        clientScope.setProtocol(clientScopePg.getStringProperty(KeycloakConfig.PROP_CLIENT_SCOPE_PROTOCOL, "openid-connect"));
         PropertyGroup attributesPg = clientScopePg.getPropertyGroup(KeycloakConfig.PROP_CLIENT_SCOPE_ATTRIBUTES);
         if (attributesPg != null) {
             Map<String, String> attributes = clientScope.getAttributes();
@@ -378,10 +380,10 @@ public class KeycloakConfigurator {
         if (client == null) {
             client = new ClientRepresentation();
             client.setClientId(clientId);
-            clients.create(client);
+            Response response = clients.create(client);
             client = getClientByClientId(clients, clientId);
             if (client == null) {
-                throw new RuntimeException("Unable to create client");
+                throw new RuntimeException("Unable to create client: " + response.readEntity(String.class));
             }
         }
 
@@ -510,10 +512,10 @@ public class KeycloakConfigurator {
                 }
                 identityProvider.setConfig(config);
             }
-            identityProviders.create(identityProvider);
+            Response response = identityProviders.create(identityProvider);
             identityProvider = getIdentityProviderByAlias(identityProviders, identityProviderAlias);
             if (identityProvider == null) {
-                throw new RuntimeException("Unable to create identity provider");
+                throw new RuntimeException("Unable to create identity provider: " + response.readEntity(String.class));
             }
         }
 
@@ -894,10 +896,10 @@ public class KeycloakConfigurator {
         if (user == null) {
             user = new UserRepresentation();
             user.setUsername(userName);
-            users.create(user);
+            Response response = users.create(user);
             user = getUserByName(users, userName);
             if (user == null) {
-                throw new RuntimeException("Unable to create user");
+                throw new RuntimeException("Unable to create user: " + response.readEntity(String.class));
             }
         }
 
