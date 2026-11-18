@@ -5,7 +5,7 @@
 # ----------------------------------------------------------------------------
 
 # Keep in sync with keycloak.version in the root pom.xml
-ARG KEYCLOAK_VERSION=26.7.4
+ARG KEYCLOAK_VERSION=26.8.2
 
 # Build stage
 FROM maven:3-eclipse-temurin-21 AS build
