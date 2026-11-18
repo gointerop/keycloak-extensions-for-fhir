@@ -60,8 +60,9 @@ jobs:
           image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          # upstream Keycloak CVEs accepted after review, each one justified in the file
-          trivyignores: .trivyignore
+          # Fixable upstream Keycloak CVEs accepted after review: scoped by `paths`, justified and with an expiry.
+          # A single YAML file is passed to Trivy as-is (v0.36.0 entrypoint); plain files would be concatenated.
+          trivyignores: .trivyignore.yaml
           exit-code: '1'
 
       # DOCKERHUB_USERNAME / DOCKERHUB_TOKEN: a Docker Hub access token with read/write scope on the gointerop namespace

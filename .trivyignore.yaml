@@ -1,0 +1,35 @@
+# Trivy ignore list: targeted, auditable, temporary.
+#
+# The CI gate (.github/workflows/build.yaml, "Scan image") fails the build on any HIGH/CRITICAL that has a fix
+# available (ignore-unfixed). Findings with no fix anywhere (UBI 9 packages Red Hat has not patched, or marks
+# will_not_fix) are not gated and need no entry here; the weekly unfiltered scan of the deployed image
+# (gointerop/gointerop-keycloak, cve-scan.yaml) still lists them.
+#
+# An entry here means: a fix EXISTS upstream of Keycloak and we have decided not to take it yet. It needs all of:
+#   - id, and `paths` scoping it to the one file where it is accepted. YAML rather than the plain-text
+#     .trivyignore for exactly this: an id there is ignored everywhere in the image, so accepting a CVE in one
+#     Keycloak library would also hide the same CVE arriving in another jar.
+#   - statement: why we do not take the fix, and why it is not reachable.
+#   - expired_at: when the entry stops applying and the gate goes red again. That is the exit condition,
+#     enforced rather than remembered. Re-check, then delete the entry or extend it with a new reason.
+#
+# Paths name the exact jar, version included: when Keycloak ships a different version of the library the entry
+# stops matching on purpose, so the new version gets looked at instead of inheriting the acceptance.
+#
+# Review the whole file on every Keycloak upgrade and at each monthly CVE iteration.
+# Last review: 2026-11-18, Keycloak 26.8.2. The upgrade from 26.7.4 fixed every entry accepted on 2026-09-24
+# (netty-handler, bcprov, mssql-jdbc, pcre2), so they were removed.
+
+vulnerabilities:
+  # ---- Keycloak 26.8.2 bundled libraries (added 2026-11-18) ----------------------------------------------------
+  # Exit: delete when a Keycloak release bundles guava >= 33.7.2 (the jar name in /opt/keycloak/lib/lib/main
+  # changes and the gate tells you), or on expiry, whichever comes first.
+  - id: CVE-2026-102554
+    paths:
+      - "opt/keycloak/lib/lib/main/com.google.guava.guava-33.6.0-jre.jar"
+    statement: >-
+      guava DoS (unthrottled allocation) while deserializing CompactHashMap / CompactHashSet /
+      MapMakerInternalMap from a Java serialization stream. Not reachable: Keycloak does not accept Java
+      serialization from clients and its Infinispan caches use ProtoStream. Swapping the jar inside the
+      Quarkus-augmented build is riskier than a DoS that needs that input.
+    expired_at: 2027-01-05
