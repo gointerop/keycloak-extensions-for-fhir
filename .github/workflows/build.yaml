@@ -26,6 +26,20 @@ jobs:
           java-version: '21'
           cache: maven
 
+      # pom.xml is the single source of truth for the Keycloak version: Dependabot's Maven ecosystem bumps
+      # keycloak.version, but it cannot resolve the ARG in the Dockerfile's FROM (the tag regex does not accept
+      # ${...}). CI always builds with --build-arg from the pom, so a stale default would only bite local
+      # `docker build .` and the IDE test fallback. Fail fast and loudly instead of drifting silently.
+      - name: Check Keycloak version defaults match pom.xml
+        run: |
+          pom="$(sed -n 's|.*<keycloak.version>\(.*\)</keycloak.version>.*|\1|p' pom.xml)"
+          docker="$(sed -n 's|^ARG KEYCLOAK_VERSION=\(.*\)$|\1|p' Dockerfile | tr -d '\r')"
+          test_default="$(sed -n 's|.*getProperty("keycloak.version", "\([^"]*\)").*|\1|p' keycloak-extensions/src/test/java/org/alvearie/keycloak/KeycloakContainerTest.java)"
+          echo "pom=$pom Dockerfile=$docker test=$test_default"
+          [ -n "$pom" ] || { echo "::error::keycloak.version not found in pom.xml"; exit 1; }
+          [ "$docker" = "$pom" ] || { echo "::error file=Dockerfile::ARG KEYCLOAK_VERSION default ($docker) must equal keycloak.version in pom.xml ($pom)"; exit 1; }
+          [ "$test_default" = "$pom" ] || { echo "::error file=keycloak-extensions/src/test/java/org/alvearie/keycloak/KeycloakContainerTest.java::fallback version ($test_default) must equal keycloak.version in pom.xml ($pom)"; exit 1; }
+
       # Runs the unit tests plus the Testcontainers/Selenium test against a real Keycloak
       - name: Build with Maven
         run: mvn --batch-mode --update-snapshots verify

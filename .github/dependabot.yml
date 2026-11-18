@@ -1,13 +1,36 @@
 version: 2
 updates:
+  # keycloak.version in the root pom.xml is the single source of truth for the Keycloak version. Dependabot bumps
+  # it here and CI builds the image with it. The Dockerfile ARG default and the test fallback must follow in the
+  # same PR; the "Check Keycloak version defaults" CI step fails until they do.
   - package-ecosystem: "maven"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # keycloak-core/-services/-spi and the admin client move together in one PR
+      keycloak:
+        patterns:
+          - "org.keycloak:*"
+  # Does NOT track the Keycloak base image (FROM ...:${KEYCLOAK_VERSION} is not resolvable by Dependabot);
+  # it covers the Maven build image and the keycloak-config runtime image.
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      # Java 21 is deliberate (see maven.compiler.release)
+      - dependency-name: "maven"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: "docker"
+    directory: "/keycloak-config"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "maven"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
