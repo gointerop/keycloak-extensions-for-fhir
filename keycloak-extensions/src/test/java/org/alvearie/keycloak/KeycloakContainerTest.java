@@ -58,7 +58,7 @@ public class KeycloakContainerTest {
     // per the testcontainers doc, the contain should be started in a static block before JUnit starts up
     private static KeycloakContainer keycloak;
     static {
-        keycloak = new KeycloakContainer("quay.io/keycloak/keycloak:" + System.getProperty("keycloak.version", "26.7.4"))
+        keycloak = new KeycloakContainer("quay.io/keycloak/keycloak:" + System.getProperty("keycloak.version", "26.8.2"))
                 .withProviderClassesFrom("target/classes");
         // Uncomment this to keep the container running after the tests complete
 //        keycloak.withReuse(true);

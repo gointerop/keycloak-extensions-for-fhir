@@ -11,10 +11,10 @@
 
   <properties>
     <!-- Keep in sync with the base image tag in the root Dockerfile -->
-    <keycloak.version>26.7.4</keycloak.version>
+    <keycloak.version>26.8.2</keycloak.version>
     <!-- The admin client is released separately and is compatible with the 26.x server line -->
-    <keycloak-admin-client.version>26.0.12</keycloak-admin-client.version>
-    <testcontainers-keycloak.version>4.3.1</testcontainers-keycloak.version>
+    <keycloak-admin-client.version>26.0.13</keycloak-admin-client.version>
+    <testcontainers-keycloak.version>4.4.0</testcontainers-keycloak.version>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>

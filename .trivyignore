@@ -1,29 +1,15 @@
 # CVEs accepted in the upstream quay.io/keycloak/keycloak image (libraries bundled by Keycloak itself, not by
-# this project). Remove each entry once a Keycloak release ships the fixed library (Dependabot tracks the base image).
-# Reviewed 2026-09-24 against Keycloak 26.7.4.
+# this project). Remove each entry once a Keycloak release ships the fixed library.
+# Reviewed 2026-11-18 against Keycloak 26.8.2 (weekly scan of gointerop/gointerop-keycloak, run 43946390208).
+#
+# Upgrading from 26.7.4 to 26.8.2 fixed every entry accepted on 2026-09-24 (netty-handler CVE-2026-75595,
+# bcprov CVE-2026-8763 / CVE-2026-13506, mssql-jdbc CVE-2025-59250, pcre2 CVE-2026-86145 / CVE-2026-89161),
+# so they were removed. Unfixed OS findings (sqlite-libs, java-21-openjdk-headless CVE-2026-91403) need no entry:
+# the CI gate runs with ignore-unfixed.
 
-# netty-handler 4.1.136 (fixed in 4.1.137): SNI routing bypass. Not reachable: TLS terminates at nginx and
-# Keycloak only serves plain HTTP on the loopback interface.
-CVE-2026-75595
-
-# bcprov-jdk18on 1.84 (fixed in 1.85): X.509 Name Constraints bypass. Only affects certificate path validation
-# (mTLS / X.509 client authentication), which is not used.
-CVE-2026-8763
-
-# bcprov-jdk18on 1.84 (fixed in 1.85): denial of service via lazy ASN.1 sequence parsing.
-CVE-2026-13506
-
-# mssql-jdbc 13.2.1: false positive, 13.2.1 is itself listed as a fixed version; the SQL Server driver is not used
-# (the image is built for PostgreSQL).
-CVE-2025-59250
-
-# pcre2 / pcre2-syntax 10.40-6.el9 (OS package of the UBI 9 base image, not a Keycloak library). No fixed version.
-# Exploiting either one requires a program that uses PCRE2 to compile or run an attacker-chosen regular expression;
-# Keycloak runs on the JVM and uses java.util.regex, and PCRE2 is only there for base-image system utilities.
-# Not reported by this repo's CI (ignore-unfixed) but listed by the weekly unfiltered scan of the deployed image
-# (gointerop/gointerop-keycloak cve-scan.yaml, run 36018713095). Accepted on 2026-09-24.
-# CVE-2026-86145: out-of-bounds write via crafted regular expression. Red Hat status: will_not_fix, so it stays
-# for as long as Keycloak ships on UBI 9.
-CVE-2026-86145
-# CVE-2026-89161: memory corruption in pcre2_jit_match. Red Hat status: affected (fix not published yet).
-CVE-2026-89161
+# guava 33.6.0-jre (/opt/keycloak/lib/lib/main, fixed in 33.7.2): denial of service via unthrottled allocation
+# while deserializing CompactHashMap / CompactHashSet / MapMakerInternalMap from a Java serialization stream.
+# Only reachable when untrusted Java-serialized data is deserialized; Keycloak does not accept Java serialization
+# from clients, and its Infinispan caches use ProtoStream. Replacing the jar inside the Quarkus build is not
+# worth the risk for a DoS. Expires so the next monthly CVE iteration re-checks the Keycloak release.
+CVE-2026-102554 exp:2027-01-05
